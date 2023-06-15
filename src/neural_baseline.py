@@ -98,6 +98,7 @@ def load_and_prepare_data():
         os.mkdir("./data")
     export_to_file("./data/conll_train.txt", conll_data["train"])
     export_to_file("./data/conll_val.txt", conll_data["validation"])
+    export_to_file("./data/conll_test.txt", conll_data["test"])
     return conll_data
 
 def export_to_file(export_file_path, data):
@@ -158,6 +159,7 @@ def prepare_datasets(vocabulary, batch_size):
     lookup_layer = keras.layers.StringLookup(vocabulary=vocabulary)
     train_data = tf.data.TextLineDataset("./data/conll_train.txt")
     val_data = tf.data.TextLineDataset("./data/conll_val.txt")
+    test_data = tf.data.TextLineDataset("./data/conll_test.txt")
     train_dataset = (
         train_data.map(map_record_to_training_data)
         .map(lambda x, y: (lowercase_and_convert_to_ids(x, lookup_layer), y))
@@ -168,7 +170,12 @@ def prepare_datasets(vocabulary, batch_size):
         .map(lambda x, y: (lowercase_and_convert_to_ids(x, lookup_layer), y))
         .padded_batch(batch_size)
     )
-    return train_dataset, val_dataset
+    test_dataset = (
+        test_data.map(map_record_to_training_data)
+        .map(lambda x, y: (lowercase_and_convert_to_ids(x, lookup_layer), y))
+        .padded_batch(batch_size)
+    )
+    return train_dataset, val_dataset, test_dataset
 
 # ---------------- Model: Training and Predicting ----------------
 
@@ -176,10 +183,10 @@ def create_model(num_tags, vocab_size):
     ner_model = NERModel(num_tags, vocab_size, embed_dim=32, num_heads=4, ff_dim=64)
     return ner_model
 
-def compile_and_fit(model, train_dataset, epochs=10):
+def compile_and_fit(model, train_dataset, epochs=10, val_dataset=None):
     loss = CustomNonPaddingTokenLoss()
     model.compile(optimizer="adam", loss=loss)
-    model.fit(train_dataset, epochs=epochs)
+    return model.fit(train_dataset, epochs=epochs, validation_data=val_dataset)
 
 def predict_sample(model, text, mapping, lookup_layer):
     sample_input = tokenize_and_convert_to_ids(text, lookup_layer)
